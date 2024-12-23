@@ -6,6 +6,7 @@ import com.github.avrokotlin.avro4k.encodeToGenericData
 import com.github.avrokotlin.avro4k.schema
 import kotlinx.serialization.*
 import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
 import org.apache.avro.SchemaNormalization
@@ -16,6 +17,7 @@ import org.apache.avro.io.EncoderFactory
 import org.apache.commons.io.output.ByteArrayOutputStream
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import kotlin.reflect.typeOf
 
 @OptIn(ExperimentalSerializationApi::class)
 class TinkeringTests {
@@ -91,6 +93,7 @@ class TinkeringTests {
 
     }
 
+    @OptIn(InternalSerializationApi::class)
     fun accountEventSerializerAndModule() : Pair<SerializersModule, KSerializer<AccountEvent>> {
 
         val serializersModule = SerializersModule {
@@ -99,8 +102,15 @@ class TinkeringTests {
                 subclass(AccountEvent.Credited::class)
                 subclass(AccountEvent.Debited::class)
             }
+        } + SerializersModule { /* just testing out duplicating the schema here */
+            polymorphic(AccountEvent::class) {
+                subclass(AccountEvent.Opened::class)
+                subclass(AccountEvent.Credited::class)
+                subclass(AccountEvent.Debited::class)
+            }
         }
 
+        typeOf<AccountEvent>()
         val serializer: KSerializer<AccountEvent> = serializersModule.serializer<AccountEvent>()
         return Pair(serializersModule, serializer)
     }
