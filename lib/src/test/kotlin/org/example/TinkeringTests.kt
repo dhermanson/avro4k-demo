@@ -2,13 +2,15 @@ package org.example
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.schema
-import kotlinx.serialization.descriptors.setSerialDescriptor
+import kotlinx.serialization.*
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
-import kotlinx.serialization.serializer
+import org.apache.avro.SchemaNormalization
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
+@OptIn(ExperimentalSerializationApi::class)
 class TinkeringTests {
 
     @Test
@@ -19,6 +21,36 @@ class TinkeringTests {
 
     @Test
     fun itShouldGeneratePolymorphicSchemas() {
+        val avro = Avro {
+            this.validateSerialization = true
+        }
+
+        val (module, serializer) = accountEventSerializerAndModule()
+
+        val schema = avro.schema(serializer)
+
+        println(schema.toString(true))
+
+    }
+
+    @Test
+    fun itShouldSerializeAndDeserialize() {
+        val avro = Avro {
+            this.validateSerialization = true
+        }
+        val (module, serializer) = accountEventSerializerAndModule()
+        val writerSchema = avro.schema(serializer)
+        val fingerprint = SchemaNormalization.parsingFingerprint64(writerSchema)
+
+        val initialEvent = AccountEvent.Opened(100u)
+        val serializedEvent = avro.encodeToByteArray(writerSchema, serializer, initialEvent)
+
+        val roundTripEvent = avro.decodeFromByteArray(writerSchema, serializer, serializedEvent)
+
+        assertEquals(roundTripEvent, initialEvent)
+    }
+
+    fun accountEventSerializerAndModule() : Pair<SerializersModule, KSerializer<AccountEvent>> {
 
         val serializersModule = SerializersModule {
             polymorphic(AccountEvent::class) {
@@ -27,10 +59,8 @@ class TinkeringTests {
                 subclass(AccountEvent.Debited::class)
             }
         }
-        val serializer = serializersModule.serializer<AccountEvent>()
 
-        val schema = Avro.schema(serializer)
-
-        println(schema.toString(true))
+        val serializer: KSerializer<AccountEvent> = serializersModule.serializer<AccountEvent>()
+        return Pair(serializersModule, serializer)
     }
 }
