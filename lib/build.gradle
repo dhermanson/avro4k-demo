@@ -25,6 +25,8 @@ dependencies {
 
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
+    api libs.avro4k.core
+
     // This dependency is exported to consumers, that is to say found on their compile classpath.
     api libs.commons.math3
 
