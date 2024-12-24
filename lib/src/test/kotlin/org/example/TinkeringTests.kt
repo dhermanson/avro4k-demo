@@ -9,12 +9,15 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
+import org.apache.avro.Schema
+import org.apache.avro.SchemaCompatibility
 import org.apache.avro.SchemaNormalization
 import org.apache.avro.generic.GenericDatumReader
 import org.apache.avro.generic.GenericDatumWriter
 import org.apache.avro.io.DecoderFactory
 import org.apache.avro.io.EncoderFactory
 import org.apache.commons.io.output.ByteArrayOutputStream
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.util.Base64
@@ -98,6 +101,68 @@ class TinkeringTests {
         assertEquals(roundTripInitialEvent, initialEvent)
 
     }
+
+    @Test
+    fun itShouldCalculateParsingForm() {
+        val parser = Schema.Parser()
+        val userSchema1 = parser.parse(exampleUserSchemaString1)
+        val parsingForm = SchemaNormalization.toParsingForm(userSchema1)
+        println(parsingForm)
+    }
+
+    @Test
+    fun itShouldSupportSchemaCompatabilityChecks() {
+//        val parser = Schema.Parser()
+        val userSchema1 = Schema.Parser().parse(exampleUserSchemaString1)
+        val userSchema2 = Schema.Parser().parse(exampleUserSchemaString2)
+
+        val readerSchema = userSchema2
+        val writerSchema = userSchema1
+
+        val compatabilityResult = SchemaCompatibility.checkReaderWriterCompatibility(readerSchema, writerSchema)
+        when (compatabilityResult.result.compatibility) {
+            SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE -> {
+
+            }
+            SchemaCompatibility.SchemaCompatibilityType.INCOMPATIBLE -> {
+                Assertions.fail("not expecting schemas to be incompatible")
+            }
+            SchemaCompatibility.SchemaCompatibilityType.RECURSION_IN_PROGRESS -> {
+                Assertions.fail("not expecting to be recursion in progress")
+            }
+            null -> {
+                Assertions.fail("not expecting to be null")
+            }
+        }
+    }
+
+
+    val exampleUserSchemaString1 =  """
+        {"namespace": "example.avro",
+         "type": "record",
+         "name": "User",
+         "fields": [
+             {"name": "name", "type": "string"},
+             {"name": "favorite_number",  "type": ["int", "null"]},
+             {"name": "favorite_color", "type": ["string", "null"]}
+         ]
+        }
+
+    """.trimIndent()
+
+    val exampleUserSchemaString2 =  """
+        {"namespace": "example.avro",
+         "type": "record",
+         "name": "User",
+         "fields": [
+             {"name": "name", "type": "string"},
+             {"name": "favorite_number",  "type": ["int", "null"]},
+             {"name": "favorite_color", "type": ["string", "null"]},
+             {"name": "favorite_state", "type": ["string", "null"], "default": "null" }
+         ]
+        }
+
+    """.trimIndent()
 
     @OptIn(InternalSerializationApi::class)
     fun accountEventSerializerAndModule() : Pair<SerializersModule, KSerializer<AccountEvent>> {
