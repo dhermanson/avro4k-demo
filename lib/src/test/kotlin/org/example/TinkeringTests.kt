@@ -103,6 +103,20 @@ class TinkeringTests {
     }
 
     @Test
+    fun defaultAndExplicitlyDefinedSerializersModuleShouldProduceSameSchema() {
+        val avro = Avro {
+            this.validateSerialization = true
+        }
+        val (module, serializerWithExplicitPoly) = accountEventSerializerAndModule()
+        val explicitPolySchema = avro.schema(serializerWithExplicitPoly)
+        val defaultSchema = avro.schema<AccountEvent>()
+        val defaultSerializer = AccountEvent.serializer()
+
+        assertEquals(defaultSchema, explicitPolySchema)
+
+    }
+
+    @Test
     fun itShouldCalculateParsingForm() {
         val parser = Schema.Parser()
         val userSchema1 = parser.parse(exampleUserSchemaString1)
