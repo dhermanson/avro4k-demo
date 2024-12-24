@@ -14,6 +14,7 @@ import org.apache.avro.SchemaCompatibility
 import org.apache.avro.SchemaNormalization
 import org.apache.avro.generic.GenericDatumReader
 import org.apache.avro.generic.GenericDatumWriter
+import org.apache.avro.generic.GenericRecord
 import org.apache.avro.io.DecoderFactory
 import org.apache.avro.io.EncoderFactory
 import org.apache.commons.io.output.ByteArrayOutputStream
@@ -23,7 +24,6 @@ import org.junit.jupiter.api.Test
 import java.util.Base64
 import kotlin.reflect.typeOf
 
-@OptIn(ExperimentalSerializationApi::class)
 class TinkeringTests {
 
     @Test
@@ -81,6 +81,7 @@ class TinkeringTests {
 
         val genericInitialEvent = avro.encodeToGenericData(writerSchema, initialEvent)
 
+        // serializer
         val out = ByteArrayOutputStream()
         val writer = GenericDatumWriter<Any>(writerSchema)
         val encoder = EncoderFactory.get().jsonEncoder(writerSchema, out)
@@ -117,6 +118,22 @@ class TinkeringTests {
     }
 
     @Test
+    fun iCanUseAvroSerializationOnceIHaveTheSchema() {
+
+        val avro = Avro {  }
+
+        val accountEventSchema = avro.schema<AccountEvent>()
+
+        val initialEvent = AccountEvent.Opened(100u)
+
+        val genericData = avro.encodeToGenericData(accountEventSchema, initialEvent)
+
+        val decoded = avro.decodeFromGenericData<AccountEvent>(accountEventSchema, genericData)
+
+        assertEquals(decoded, initialEvent)
+    }
+
+    @Test
     fun itShouldCalculateParsingForm() {
         val parser = Schema.Parser()
         val userSchema1 = parser.parse(exampleUserSchemaString1)
@@ -148,6 +165,62 @@ class TinkeringTests {
                 Assertions.fail("not expecting to be null")
             }
         }
+    }
+
+    @Test
+    fun itShouldHaveInteropWithAvroSerialization() {
+
+        val avro = Avro {  }
+
+        val schema = avro.schema<AccountEvent>()
+        val serializer = AccountEvent.serializer()
+
+        val genericWriter = GenericDatumWriter<GenericRecord>(schema)
+        val genericReader = GenericDatumReader<GenericRecord>(schema)
+
+        val initialEvent = AccountEvent.Opened(100u)
+
+        // serialize to byte array using avro4k
+        val binaryFromAvro4k = avro.encodeToByteArray(schema, serializer, initialEvent)
+
+        // deserialize to generic data
+        val genericDataFromBinary = DecoderFactory.get().binaryDecoder(binaryFromAvro4k, null).let { decoder ->
+            genericReader.read(null, decoder)
+        }
+
+        // serialize with json encoder
+        val json = ByteArrayOutputStream().let { baos ->
+            val encoder = EncoderFactory.get().jsonEncoder(schema, baos)
+            genericWriter.write(genericDataFromBinary, encoder)
+            encoder.flush()
+            baos.close()
+            baos.toString(Charsets.UTF_8)
+        }
+
+        // deserialize with json decoder
+        val genericDataFromJson = DecoderFactory.get().jsonDecoder(schema, json).let { decoder ->
+            genericReader.read(null, decoder)
+
+        }
+        assertEquals(genericDataFromJson, genericDataFromBinary)
+
+        // serialize back to byte array
+        val binaryFromGenericData = ByteArrayOutputStream().let { baos ->
+            val encoder = EncoderFactory.get().directBinaryEncoder(baos, null)
+            genericWriter.write(genericDataFromJson, encoder)
+            encoder.flush()
+            baos.close()
+            baos.toByteArray()
+        }
+
+//        assertEquals(binaryFromGenericData, binaryFromAvro4k)
+        // deserialize from byte array with avro4k
+        val roundTripEvent = avro.decodeFromByteArray(schema, serializer, binaryFromGenericData)
+
+        assertEquals(roundTripEvent, initialEvent)
+
+
+
     }
 
 
