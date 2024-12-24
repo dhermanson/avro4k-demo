@@ -17,6 +17,7 @@ import org.apache.avro.io.EncoderFactory
 import org.apache.commons.io.output.ByteArrayOutputStream
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import java.util.Base64
 import kotlin.reflect.typeOf
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -66,7 +67,12 @@ class TinkeringTests {
         }
         val (module, serializer) = accountEventSerializerAndModule()
         val writerSchema = avro.schema(serializer)
-        val fingerprint = SchemaNormalization.parsingFingerprint64(writerSchema)
+        // https://avro.apache.org/docs/1.7.5/api/java/org/apache/avro/SchemaNormalization.html
+        val fingerprintSha256 = SchemaNormalization.parsingFingerprint("SHA-256", writerSchema)
+        val b64FingerprintSha256 = Base64.getEncoder().encodeToString(fingerprintSha256)
+        val fingerprint64 = SchemaNormalization.parsingFingerprint64(writerSchema)
+        println(b64FingerprintSha256)
+        println(fingerprint64)
 
         val initialEvent = AccountEvent.Opened(100u)
 
